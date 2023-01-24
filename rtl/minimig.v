@@ -241,6 +241,9 @@ module minimig
 	output [8:0]  rdata_okk,   // right DAC data (PWM volume)
 	output  [1:0] aud_mix,
 
+	output [15:0] cdda_l,
+	output [15:0] cdda_r,
+	
 	//user i/o
 	output  [1:0] cpucfg,
 	output  [2:0] cachecfg,
@@ -307,6 +310,7 @@ wire        _led;					//power led
 wire  [3:0] sel_chip;			//chip ram select
 wire  [2:0] sel_slow;			//slow ram select
 wire        sel_kick;			//rom select
+wire		sel_kickext;		// extended rom select
 wire        sel_kick1mb;      // 1MB upper rom select
 wire        sel_kick256kmirror;// mirror f8-fb to fc-ff in a1k mode    
 wire        sel_cia;				//CIA address space
@@ -418,6 +422,38 @@ always @(posedge clk) if (clk7_en && reset) ntsc <= chipset_config[1];
 
 assign ide_ena  = ide_config[0];
 assign ide_fast = ~ide_config[5] & cpucfg[1];
+
+//--------------------------------------------------------------------------------------
+// cdda fifo
+
+wire	hdd_cdda_req;
+wire	hdd_cdda_wr;
+
+reg         cen_44100;
+reg  [31:0] cen_44100_cnt;
+wire [31:0] cen_44100_cnt_next = cen_44100_cnt + 16'd44100;
+always @(posedge clk) begin
+	cen_44100 <= 0;
+	cen_44100_cnt <= cen_44100_cnt_next;
+	if (cen_44100_cnt_next >= (28*1000000)) begin
+		cen_44100 <= 1;
+		cen_44100_cnt <= cen_44100_cnt_next - (28*1000000);
+	end
+end
+
+cdda_fifo cdda_fifo (
+	.clk_sys       ( clk          ),	// I
+	.clk_en        ( clk7_en      ),	// I
+	.cen_44100     ( cen_44100    ),	// I
+	.reset         ( reset        ),	// I
+
+	.hdd_cdda_req  ( hdd_cdda_req ),	// O
+	.hdd_cdda_wr   ( hdd_cdda_wr  ),	// I
+	.hdd_data_out  ( ide_readdata ),	// I [15:0]
+
+	.cdda_l        ( cdda_l       ),	// O [15:0]
+	.cdda_r        ( cdda_r       )		// O [15:0]
+);
 
 //--------------------------------------------------------------------------------------
 
@@ -701,6 +737,7 @@ minimig_bankmapper BMAP1
 	.slow1(sel_slow[1]),
 	.slow2(sel_slow[2]),
 	.kick(sel_kick),
+	.kickext(sel_kickext),	
 	.kick1mb(sel_kick1mb),
 	.kick256kmirror(sel_kick256kmirror),
  	.cart(sel_cart),
@@ -788,6 +825,7 @@ gary GARY1
 	.sel_chip(sel_chip),
 	.sel_slow(sel_slow),
 	.sel_kick(sel_kick),
+	.sel_kickext(sel_kickext),	
 	.sel_kick1mb(sel_kick1mb),
 	.sel_kick256kmirror(sel_kick256kmirror),
 	.sel_cia(sel_cia),
@@ -803,29 +841,75 @@ gary GARY1
 	.bootrom(bootrom)
 );
 
+/*
 gayle GAYLE1
 (
-	.clk(clk),
-	.reset(reset),
-	.addr(cpu_address_out),
-	.data_in(cpu_data_out),
-	.data_out(gayle_data_out),
-	.rd(cpu_rd),
-	.wr(cpu_hwr),
-	.sel_ide(sel_ide),
-	.sel_gayle(sel_gayle),
-	.irq(gayle_irq),
-	.nrdy(gayle_nrdy),
+	.clk(clk),						// I
+	.reset(reset),					// I
+	.addr(cpu_address_out),			// I [23:1]
+	.data_in(cpu_data_out),			// I [15:0]
+	.data_out(gayle_data_out),		// O [15:0]
+	.rd(cpu_rd),					// I
+	.wr(cpu_hwr),					// I
+	.sel_ide(sel_ide),				// I // $DAxxxx
+	.sel_gayle(sel_gayle),			// I // $DExxxx
+	.irq(gayle_irq),				// O
+	.nrdy(gayle_nrdy),				// O fifo is not ready for reading
+
+	//.longword(),					// I
+
+	.ide_req(ide_req),				// O [5:0]
+	.ide_address(ide_address),		// I [4:0]
+	.ide_write(ide_write),			// I
+	.ide_writedata(ide_writedata),	// I [15:0]
+	.ide_read(ide_read),			// O
+	.ide_readdata(ide_readdata),	// O [15:0]	
+
+	.led(hdd_led)					// O
+);
+*/
+
+wire	hdd_wr;					//register write strobe
+wire	hdd_status_wr;			//status register write strobe
+wire	hdd_data_wr;			//data port write strobe
+wire	hdd_data_rd;			//data port read strobe
+
+gayle_atapi GAYLE1
+(
+	.clk(clk),												// I
+	.clk7_en(clk7_en),										// I
+	.reset(reset),											// I
+	.address_in(cpu_address_out),							// I [23:1]
+	.data_in(cpu_data_out),									// I [15:0]
+	.data_out(gayle_data_out),								// O [15:0]
+	.rd(cpu_rd),											// I
+	.hwr(cpu_hwr),											// I
+	.lwr(cpu_lwr),											// I
+	.sel_ide(sel_ide),										// I // $DAxxxx
+	.sel_gayle(sel_gayle),									// I // $DExxxx	 						
+	.irq(gayle_irq),										// O
+	.nrdy(gayle_nrdy),										// O // fifo is not ready for reading		
+	.hdd0_ena(2'b11),										// I // [1:0] enables Master & Slave drives on primary channel     {2{ide_config0[0]}} & ide_config0[2:1]
+	.hdd1_ena(2'b11),										// I // [1:0] enables Master & Slave drives on secondary channel   {2{ide_config1[0]}} & ide_config1[2:1]
 
 	.ide_req(ide_req),
-	.ide_address(ide_address),
-	.ide_write(ide_write),
-	.ide_writedata(ide_writedata),
-	.ide_read(ide_read),
-	.ide_readdata(ide_readdata),
+	.hdd_cmd_req(),											// O  hdd_cmd_req   (3'b100)
+	.hdd_dat_req(),											// O  hdd_dat_req   (3'b101)
+	.hdd_data_in(ide_readdata),								// O  [15:0] hdd_data_in
+	.hdd_addr({2'b00,ide_address}),							// I   [2:0] hdd_addr
+	.hdd_data_out(ide_writedata),							// I  [15:0] hdd_data_out
+	.hdd_wr(ide_write),										// I  hdd_wr
 
-	.led(hdd_led)
+	//.hdd_status_wr(hdd_status_wr),						// I  hdd_status_wr
+	//.hdd_data_wr(hdd_data_wr),							// I  hdd_data_wr
+	//.hdd_data_rd(hdd_data_rd),							// I  hdd_data_rd
+
+	//.hd_fwr(hd_fwr),										// O  hd_fwr (hd leds)
+	//.hd_frd(hd_frd),										// O  hd_frd (hd leds)
+
+	.led(hdd_led)											// O	
 );
+
 
 //instantiate system control
 minimig_syscontrol CONTROL1 
