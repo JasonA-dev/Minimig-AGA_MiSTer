@@ -48,9 +48,9 @@
 
 module gary
 (
-	input  [23:1] cpu_address_in, //cpu address bus input
-	input  [20:1] dma_address_in, //agnus dma memory address input
-	output [23:1] ram_address_out, //full ram address output to make memory mapping easier
+	input  [23:1] cpu_address_in, 		// cpu address bus input
+	input  [20:1] dma_address_in, 		// Agnus dma memory address input
+	output [23:1] ram_address_out, 		// full ram address output to make memory mapping easier
 	input  [15:0] cpu_data_out,
 	output [15:0] cpu_data_in,
 	input  [15:0] custom_data_out,
@@ -58,47 +58,48 @@ module gary
 	input  [15:0] ram_data_out,
 	output [15:0] ram_data_in,
 	input         a1k,
-	input         bootrom, // do the A1000 bootrom magic 		 
+	input         bootrom, 				// do the A1000 bootrom magic 		 
 	input         clk,
-	input         reset, //global reset signal
-	input         cpu_rd, //cpu read
-	input         cpu_hwr, //cpu high write
-	input         cpu_lwr, //cpu low write
+	input         reset, 				// global reset signal
+	input         cpu_rd, 				// cpu read
+	input         cpu_hwr, 				// cpu high write
+	input         cpu_lwr, 				// cpu low write
 	input         cpu_hlt,
 
-	input         ovl, //overlay kickstart rom over chipram
-	input         dbr, //Agns takes the bus
-	input         dbwe, //Agnus does a write cycle
-	output        dbs, //data bus slow down
-	output        xbs, //cross bridge select, active dbr prevents access
+	input         ovl, 					// overlay kickstart rom over chipram
+	input         dbr, 					// Agnus takes the bus
+	input         dbwe, 				// Agnus does a write cycle
+	output        dbs, 					// data bus slow down
+	output        xbs, 					// cross bridge select, active dbr prevents access
 
-	input   [3:0] memory_config, //selected memory configuration
-	input         ecs, // ECS chipset enable
-	input         hdc_ena, //enables hdd interface
+	input   [3:0] memory_config, 		// selected memory configuration
+	input         ecs, 					// ECS chipset enable
+	input         hdc_ena, 				// enables hdd interface
 
-	output        ram_rd, //bus read
-	output        ram_hwr, //bus high write
-	output        ram_lwr, //bus low write
+	output        ram_rd, 				// bus read
+	output        ram_hwr, 				// bus high write
+	output        ram_lwr, 				// bus low write
 
-	output        sel_reg, //select chip register bank
-	output reg [3:0] sel_chip, //select chip memory
-	output reg [2:0] sel_slow, //select slowfast memory ($C0000)
-	output reg   sel_kick, //select kickstart rom
-	output reg   sel_kick1mb, // 1MB kickstart rom 'upper' half
-	output reg   sel_kick256kmirror, //mirror $fc-$ff to $f8, when rom_readonly and bootrom 
-	output       sel_cia, //select CIA space
-	output       sel_cia_a, //select cia A
-	output       sel_cia_b, //select cia B
-	output       sel_rtg, //select rtg
-	output       sel_rtc, //select $DCxxxx
-	output       sel_ide, //select $DAxxxx
-	output       sel_gayle, //select $DExxxx
-	output reg   rom_readonly = 0 //when zero allows to write to $fc-$ff, blocks effect of kick256kmirror.  
+	output        sel_reg, 				// select chip register bank
+	output reg [3:0] sel_chip, 			// select chip memory
+	output reg [2:0] sel_slow, 			// select slowfast memory ($C0000)
+	output reg   sel_kick, 				// select kickstart rom
+	output reg   sel_kickext,			// select extended rom	(CD32 extended rom at $E00000, CDTV extended rom at $F00000)
+	output reg   sel_kick1mb, 			// 1MB kickstart rom 'upper' half
+	output reg   sel_kick256kmirror, 	// mirror $fc-$ff to $f8, when rom_readonly and bootrom 
+	output       sel_cia, 				// select CIA space
+	output       sel_cia_a, 			// select cia A
+	output       sel_cia_b, 			// select cia B
+	output       sel_rtg, 				// select rtg
+	output       sel_rtc, 				// select $DCxxxx
+	output       sel_ide, 				// select $DAxxxx
+	output       sel_gayle, 			// select $DExxxx
+	output reg   rom_readonly = 0 		// when zero allows to write to $fc-$ff, blocks effect of kick256kmirror.  
 );
 
 wire	[2:0] t_sel_slow;
 wire	sel_xram;
-wire	sel_bank_1; 				// $200000-$3FFFFF
+wire	sel_bank_1; 					// $200000-$3FFFFF
  
 
 //--------------------------------------------------------------------------------------
@@ -131,7 +132,7 @@ end
 //chipram, kickstart and bootrom address decode
 always @(*)
 begin
-	if (dbr)//agnus only accesses chipram
+	if (dbr)// Agnus only accesses chipram
 	begin
 		sel_chip[0] = ~dma_address_in[20] & ~dma_address_in[19];
 		sel_chip[1] = ~dma_address_in[20] &  dma_address_in[19];
@@ -140,9 +141,10 @@ begin
 		sel_slow[0] =  ecs && memory_config==4'b0100 && dma_address_in[20:19]==2'b01; //use slow0 as chipmem, when only chip0 and slow0 are enabled.
 		sel_slow[1] = 0;
 		sel_slow[2] = 0;
-	   sel_kick    = 0;
-	   sel_kick1mb = 0;
-	   sel_kick256kmirror = 0;
+	    sel_kick    = 0;
+		sel_kickext = 1'b0;	   
+	    sel_kick1mb = 0;
+	    sel_kick256kmirror = 0;
 	end
 	else
 	begin
@@ -154,6 +156,7 @@ begin
 		sel_slow[1] = t_sel_slow[1];
 		sel_slow[2] = t_sel_slow[2];
 		sel_kick    = (cpu_address_in[23:19]==5'b1111_1 && (cpu_rd || cpu_hlt || (!rom_readonly && cpu_address_in[18])))  || (cpu_rd && ovl && cpu_address_in[23:19]==5'b0000_0); //$F80000 - $FFFFFF
+		sel_kickext = (cpu_address_in[23:19]==5'b1111_0 && (cpu_rd || cpu_hlt)) ? 1'b1 : 1'b0; //$F00000 - $F7FFFF		
 		sel_kick1mb = cpu_address_in[23:19]==5'b1110_0 && (cpu_rd || cpu_hlt); // $E00000 - $E7FFFF
 		sel_kick256kmirror = cpu_address_in[23:19]==5'b1111_1 &&  cpu_rd && rom_readonly && !cpu_hlt && bootrom;
 	end

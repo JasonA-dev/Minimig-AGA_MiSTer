@@ -17,6 +17,7 @@ module minimig_bankmapper
 	input        slow1,          // slow ram select: 2nd 512 KB block 
 	input        slow2,          // slow ram select: 3rd 512 KB block 
 	input        kick,           // Kickstart ROM address range select
+	input	     kickext,	     // Kickstart extended ROM select	
 	input        kick1mb,        // 1MB Kickstart 'upper' half
 	input        kick256kmirror, // mirror f8-fb to fc-ff in a1k mode
 	input        cart,           // Action Reply memory range select
@@ -29,7 +30,11 @@ assign bank = bank_r;
 reg [7:0] bank_r;
 
 always @(*) begin
-	bank_r[7:4] = { kick,kick256kmirror , chip3 | chip2 | chip1 | chip0,  kick1mb  | slow0 | slow1 | slow2 | cart} ;
+	if(kickext == 1'b1)
+    	bank_r[7:4] = { kick, kickext, chip3 | chip2 | chip1 | chip0, kick1mb | slow0 | slow1 | slow2 | cart };	
+	else
+		bank_r[7:4] = { kick, kick256kmirror, chip3 | chip2 | chip1 | chip0,  kick1mb  | slow0 | slow1 | slow2 | cart} ;
+
 	case (memory_config)
 		0: bank_r[3:0] = {    1'b0,  1'b0,          1'b0, chip3 | chip2 | chip1 | chip0 }; // 0.5M CHIP
 		1: bank_r[3:0] = {    1'b0,  1'b0, chip3 | chip1,                 chip2 | chip0 }; // 1.0M CHIP
