@@ -505,6 +505,7 @@ agnus AGNUS1
 	.floppy_speed(floppy_config[0])
 );
 
+/*
 //instantiate paula
 paula PAULA1
 (
@@ -552,6 +553,90 @@ paula PAULA1
 	.rdata_okk(rdata_okk),
 
 	.floppy_drives(floppy_config[3:2])
+);
+*/
+
+paula_new PAULA1
+(
+	// system bus interface
+  	.clk(clk),    			// I     	// 28 MHz system clock
+  	.clk7_en(clk7_en), 		// I
+  	.clk7n_en(clk7n_en), 	// I
+	.cck(cck),	 			// I	    //colour clock enable
+	.reset(reset),			// I		//reset 
+	.reg_address_in(reg_address),	// I [8:1]  //register address inputs
+	.data_in(custom_data_in),	   		// I [15:0]	//bus data in
+	.data_out(paula_data_out),		// O [15:0]	//bus data out
+
+	//serial (uart) 
+	.txd(txd),				// O		//serial port transmitted data
+	.rxd(rxd),				// I  		//serial port received data
+
+	//interrupts and dma
+  	.ntsc(ntsc),      		// I   		// PAL/NTSC mode
+  	.sof(sof),       		// I    	// start of vertical frame
+	.strhor(strhor_paula),			// I		//start of video line (latches audio DMA requests)
+  	.vblint(vbl_int),       	// I   		// vertical blanking interrupt trigger
+	.int2(int2|(ide_fast ? ide_ext_irq : gayle_irq)),			// I		//level 2 interrupt
+	.int3(int3),			// I		//level 3 interrupt
+	.int6(int6),			// I		//level 6 interrupt
+	._ipl(_iplx),			// O [2:0]	//m68k interrupt request
+	.audio_dmal(audio_dmal),		// O [3:0]	//audio dma data transfer request (to Agnus)
+	.audio_dmas(audio_dmas),		// O [3:0]	//audio dma location pointer restart (to Agnus)
+	.disk_dmal(disk_dmal),		// O		//disk dma data transfer request (to Agnus)
+	.disk_dmas(disk_dmas),		// O		//disk dma special request (to Agnus)
+
+	//disk control signals from cia and user
+	._step(_step),			// I		//step heads of disk
+	.direc(direc),			// I		//step heads direction
+	._sel({_sel3,_sel2,_sel1,_sel0}),			// I [3:0]	//disk select 	
+	.side(side),			// I		//upper/lower disk head
+	._motor(_motor),			// I		//disk motor control
+	._track0(_track0),			// O		//track zero detect
+	._change(_change),			// O		//disk has been removed from drive
+	._ready(_ready),			// O		//disk is ready
+	._wprot(_wprot),			// O		//disk is write-protected
+  	.index(index),         	// O   		// disk index pulse
+	.disk_led(),		// O		//disk activity LED
+
+	//flash drive host controller interface	(SPI)
+	._scs(IO_FPGA),			// I		//async. serial data enable
+	.sdi(IO_DIN),				// I		//async. serial data input
+	.sdo(IO_DOUT_PAULA),				// O		//async. serial data output
+	.sck(IO_STROBE),				// I		//async. serial data clock
+
+	//audio outputs
+	.left(ldata_okk),			// O		//audio bitstream left
+	.right(rdata_okk),			// O		//audio bitstream right
+	.ldata(ldata),			// O [15:0]	//left DAC data
+	.rdata(rdata), 			// O [15:0]	//right DAC data
+
+  	// system configuration
+	.floppy_drives(floppy_config[3:2]), 	// I [1:0]	//number of extra floppy drives
+
+  	// direct sector read from SD card
+	.direct_scs(),		// I		//spi select line for direct transfers from SD card
+	.direct_sdi(),		// I		//spi data line for direct transfers from SD card
+
+  	// emulated Hard Disk Drive signals
+	.hdd_cmd_req(),     // I   		// command request
+	.hdd_dat_req(),     // I 		// data request
+	.hdd_cdda_req(),    // I  		// cdda data request
+	.hdd_addr(),    	// O [2:0]  // task file register address
+	.hdd_data_out(),   	// O [15:0] // data bus output
+	.hdd_data_in(),    	// I [15:0] // data bus input
+	.hdd_wr(),        	// O	 	// task file write enable
+	.hdd_status_wr(),   // O   		// drive status write enable
+	.hdd_data_wr(),     // O  		// data port write enable
+	.hdd_data_rd(),     // O   		// data port read enable
+	.hdd_cdda_wr(),     // O 		// cdda port write enable
+
+  	// fifo / track display
+	.trackdisp(),  		// O [7:0]
+	.secdisp(), 		// O [13:0]
+  	.floppy_fwr(), 		// O
+  	.floppy_frd(),  	// O
+  	.filter()			// I
 );
 
 wire [2:0] cachecfg_pre;

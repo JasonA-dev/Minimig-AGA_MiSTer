@@ -4,7 +4,7 @@ set_global_assignment -name QIP_FILE rtl/ram.qip
 set_global_assignment -name QIP_FILE rtl/agnus.qip
 set_global_assignment -name QIP_FILE rtl/cia.qip
 set_global_assignment -name QIP_FILE rtl/gayle.qip
-set_global_assignment -name QIP_FILE rtl/paula.qip
+set_global_assignment -name QIP_FILE rtl/paula_new/paula_new.qip
 set_global_assignment -name QIP_FILE rtl/denise.qip
 set_global_assignment -name VERILOG_FILE rtl/gary.v
 set_global_assignment -name VERILOG_FILE rtl/rtg.v
